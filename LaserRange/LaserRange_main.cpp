@@ -189,7 +189,7 @@ int main()
 		cvtColor(frame, range, CV_BGR2GRAY);     //将frame中的图像转为灰度，储存在range中
 		GaussianBlur(frame, frame, Size(3, 3), 0, 0, BORDER_DEFAULT); //高斯滤波
 		blur(range, range, Size(3, 3));                               //滤波
-		                                                             //
+		                                                             
 		MaxPixel = 0;
 		MaxHeight = 0;
 		MaxWidth = 0;         //最亮点赋初值

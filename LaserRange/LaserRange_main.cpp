@@ -208,7 +208,7 @@ int main()
 
 
 		vector<Vec4i> hierarchy;   //每个元素包含4个整数
-		Canny(range, range_canny, 0, 200, 3); //利用canny算法检测边缘  输入必须为灰度图    
+		Canny(range, range_canny, 0, 200, 3); //利用canny算法检测边缘  输入必须为灰度图 新的图片存放在range_canny中   
 		vector<vector<Point> > contours;  //定义二维浮点型向量，用来储存边界的坐标，在着边界的时候自动生成，这里给他开辟空间
 		findContours(range_canny, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0)); //查找轮廓 并确定轮廓的建立与显示方法
 
@@ -227,23 +227,27 @@ int main()
 		av_pixy = av_pixy / av_pixy_num;
 
 		av_pixy_last = av_pixy;
+
 		/*这里是用激光束中心点的坐标的平均值来计算距离，精度比另一种算法高*/
 		if (begin_flag == 1)
 		{
 			dis_arange[av_point_num] = av_pixy;
 			av_point_num++;
-			if (av_point_num == 10)
+			if (av_point_num == 10)             //舵机的每个位置都取10张图片来就距离的平均值，以减少误差
 			{
-			sort(dis_arange,dis_arange+10);
-			strcpy_s(send, "ABCDEF\r\n");
+			sort(dis_arange,dis_arange+10);     //冒泡排序，将距离值从低到高排序，以便去掉一些误差特别大的点
+			strcpy_s(send, "ABCDEF\r\n");       //使用串口发送字符串，控制舵机旋转一定角度
 			Write(hCom, send, 8);//发送“ABCDE”
 			Sleep(5);//延时0.5s
 			av_point_num = 0;
-			dis_av = ( dis_arange[3] + dis_arange[4] + dis_arange[5]+ dis_arange[6]) / 4.0;
-			PixToCenter = abs(range.cols / 2 - dis_av);
-			distance = w_mm / tan(PixToCenter * pixcel + offset);
+			dis_av = ( dis_arange[3] + dis_arange[4] + dis_arange[5]+ dis_arange[6]) / 4.0;    //平均亮度中心的像素点坐标
+			PixToCenter = abs(range.cols / 2 - dis_av);    //以摄像头感光元件正中心为坐标原点的绝对坐标
+			distance = w_mm / tan(PixToCenter * pixcel + offset);   //计算实际距离的公式  注意：以mm为单位，计算用的角度以rad为单位，并不是°为单位
+
 			if (distance < 0)
 				distance = -distance;
+
+			/*这里计算以摄像头为中心的所测量的点的二维坐标，以便得到平面的坐标点云数据*/
 			send_num++;
 			dis_x = cos(send_num*3.14 / RAD_NUM)*distance;
 			dis_y = sin(send_num*3.14 / RAD_NUM)*distance;
@@ -253,45 +257,48 @@ int main()
 		}
 
 		/*计算距离*/
-		PixToCenter = abs(range.cols / 2 - MaxWidth);
-		PixToCenter = abs(range.cols / 2 - av_pixy);
-		distance=w_mm/ tan(PixToCenter * pixcel + offset);
-		if (distance < 0)
-			distance = -distance;
+		//PixToCenter = abs(range.cols / 2 - MaxWidth);
+		//PixToCenter = abs(range.cols / 2 - av_pixy);
+		//distance=w_mm/ tan(PixToCenter * pixcel + offset);
+		//if (distance < 0)
+		//	distance = -distance;
 
+		/*按键扫描，执行相应操作，开始或退出  ESC退出，空格开始，再次空格可恢复原始状态*/
 		key_value = waitKey(30);
        if (key_value == 32)   //空格键值为32
 		{   
-		   if (begin_flag == 0)
+		   if (begin_flag == 0)      //第一次按空格开始
 		   {
 			   begin_flag = 1;            
 		   }
 		   else if (begin_flag == 1)
 		   {
-			   strcpy_s(send, "GHGHGH\r\n");
-			   Write(hCom, send, 8);
-			   begin_flag = 0;    
+			   strcpy_s(send, "GHGHGH\r\n");      //通过串口发送给单片机开始命令，以执行重新开始操作操作，舵机恢复原来角度，再次按空格可重新开始
+			   Write(hCom, send, 8);              //发送8个字节的数据
+			   begin_flag = 0;                    //改变标志位，不执行测距主循环中的内容                  
 		   }
 		} 
 	   else if (key_value == 27)    //键盘Esc键值为27
 	   {
-		   stop = true;
-		   CloseHandle(hCom);
+		   stop = true;             //结束总循环流程
+		   CloseHandle(hCom);       //关闭串口文件，保护系统内存
 	   }
 	  
 	   /*计算帧率*/
-	   fps_t = ((double)cv::getTickCount() - fps_t) / cv::getTickFrequency();
-	   fps = 1.0 / fps_t;
-	   DisString = to_string(dis_av);
+	   fps_t = ((double)cv::getTickCount() - fps_t) / cv::getTickFrequency();   //读取系统时间，计算从上次读取到运行到此的时间
+	   fps = 1.0 / fps_t;                 //计算帧率
+	   DisString = to_string(dis_av);     
 	   fpsString = "fps:" + to_string(fps) + "  cols:" + to_string(MaxWidth) + "  rows:" + to_string(MaxHeight);
 
-	   /*在图像上显示相关信息*/
-	   cv::putText(frame, fpsString, cv::Point(5, 20), cv::FONT_HERSHEY_COMPLEX, 0.5, Scalar(255, 255, 255));
+	   /*在不同图像上显示相关信息，并设置字体颜色等内容*/
+	   cv::putText(frame, fpsString, cv::Point(5, 20), cv::FONT_HERSHEY_COMPLEX, 0.5, Scalar(255, 255, 255));      
 	   cv::putText(range, DisString, cv::Point(MaxWidth, MaxHeight), cv::FONT_HERSHEY_COMPLEX, 0.5, Scalar(255, 255, 255));
 
+	   /*给每个图像窗命名*/
 	   imshow("灰度图", range);
 	   imshow("原图", frame);
 	   imshow("canny", range_canny);
+	   /*在第一次显示图像时固定图像出现的位置，防止图像出现时窗体在屏幕的外面而无法操作*/
 	   if (move_flag == 0)
 	   {
 		   cvMoveWindow("原图", 10, 10);
@@ -301,6 +308,7 @@ int main()
 	   }
 
  	}
+	/*释放图像空间，保护系统储存空间*/
 	frame.release();
 	range.release();
 	range_canny.release();

@@ -127,6 +127,20 @@ int Read(HANDLE hCom) {//串口接收
 	return 0;
 }
 
+/*获得系统时间函数，以方便对测试数据进行查看和管理*/
+/*时间的输出格式为：  星期 月份 日 时 分 秒 年份    */
+string GetTime()
+{
+	time_t timep;
+	//struct tm t;
+	char tmp[64];
+	string timp;
+	time(&timep);
+	//localtime_s(&t, &timep);   //将time_t的时间转化为struct tm 类型
+	ctime_s(tmp,64,&timep);     //将time_t类型的时间结构体转化为字符串并赋值到tmp字符数组中
+	return tmp;
+}
+
 int main()
 {
 	HANDLE hCom;//串口句柄  创建结构体
@@ -162,25 +176,35 @@ int main()
 	string fps_char;
 	string fpsString;
 	string DisString;
+	string Time;
 	char send[20];
-	VideoCapture cap(1);
+
+	VideoCapture cap(0);     //0为本电脑摄像头，1为外接摄像头
 
 	connectstate = serial_connect(hCom, L"\\\\.\\COM13", CBR_115200);   //打开10以上的串口需要加上\\\\.\\
 	 /*打开串口*/
 	if (connectstate == -1)
 	{
-		cout << "无法打开串口";
+		cout << "无法打开串口...";
 		system("pause");
 	}
 	/*打开摄像头*/
 	if (!cap.isOpened())
 	{
-		cout << "无法打开摄像头";
+		cout << "无法打开摄像头...";
 		system("pause");
 	}
 	/*打开坐标输出文件*/
 	ofstream outf;   //文件输入流
-	outf.open("LaserRangeData.txt");
+	outf.open("LaserRangeData.txt",ios::app);   //ios::app表示在未见末尾追加而不覆盖
+	Time = GetTime();
+	if (!outf) 
+	{
+		cout << "无法打开数据文件...\n";
+		system("pause");
+	}
+	else outf << Time;
+    
 
 	while (!stop)        //USB摄像头640*480（col*row）
 	{
@@ -213,15 +237,16 @@ int main()
 		findContours(range_canny, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0)); //查找轮廓 并确定轮廓的建立与显示方法
 
 		/*直接判断取平均*/
-		for (int i = range_canny.cols / 2; i < range_canny.cols; i++)
+		for (int i = range_canny.cols / 2; i < range_canny.cols; i++)   //摄像头接收的光只可能在感光元件的右半部分，直接从中点向后寻找即可
 		{
-			if (range_canny.data[220 * range_canny.step + i] > 220)
+			if (range_canny.data[220 * range_canny.step + i] > 220)     //取轮廓图中第220行上表示边缘的点的坐标，左边缘或者右边缘，所有表示边缘的点的绝对坐标（从图像边沿算起）相加
 			{
 				av_pixy = av_pixy + i;
-				av_pixy_num++;
+				av_pixy_num++;          //记录边缘点的个数，以求中心点的平均坐标
 			}
 		}
-		if (av_pixy_num == 0)
+		/*计算一张图片中，最亮点的平均绝对坐标，用av_pixy表示*/
+		if (av_pixy_num == 0)           //如果某张图片中的220行不存在边缘点，则直接算作上一次的值，以消除噪声干扰和计算错误
 			av_pixy = av_pixy_last;
 		else
 		av_pixy = av_pixy / av_pixy_num;
@@ -231,7 +256,7 @@ int main()
 		/*这里是用激光束中心点的坐标的平均值来计算距离，精度比另一种算法高*/
 		if (begin_flag == 1)
 		{
-			dis_arange[av_point_num] = av_pixy;
+			dis_arange[av_point_num] = av_pixy; //储存10张图片中的平均最亮点绝对坐标
 			av_point_num++;
 			if (av_point_num == 10)             //舵机的每个位置都取10张图片来就距离的平均值，以减少误差
 			{
@@ -256,7 +281,7 @@ int main()
 			}
 		}
 
-		/*计算距离*/
+		///*计算距离*/
 		//PixToCenter = abs(range.cols / 2 - MaxWidth);
 		//PixToCenter = abs(range.cols / 2 - av_pixy);
 		//distance=w_mm/ tan(PixToCenter * pixcel + offset);

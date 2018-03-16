@@ -179,7 +179,7 @@ int main()
 	string Time;
 	char send[20];
 
-	VideoCapture cap(0);     //0为本电脑摄像头，1为外接摄像头
+	VideoCapture cap(1);     //0为本电脑摄像头，1为外接摄像头
 
 	connectstate = serial_connect(hCom, L"\\\\.\\COM13", CBR_115200);   //打开10以上的串口需要加上\\\\.\\
 	 /*打开串口*/
@@ -222,15 +222,23 @@ int main()
 		av_pixy_num = 0;      //最亮点坐标
 
 		/*这里将图像亮度不高的点全部设置为0，软件二值化*/
-		for(int i=0;i<range.cols;i++)
-			for (int j = 0; j < range.rows; j++)
+		for(int i=0;i<range.rows;i++)
+			if(i<200)
+			for (int j = 0; j < range.cols; j++)
 			{
-				if ((range.data[j*range.step + i]) > 150)
-					range.data[j*range.step + i] = 255;
-				else range.data[j*range.step + i] = 0;
+				if ((range.data[i*range.step + j]) > 50)
+					range.data[i*range.step + j] = 255;
+				else range.data[i*range.step + j] = 0;
 			}
+			  else
+				  for (int j = 0; j < range.cols; j++)
+				  {
+					  if ((range.data[i*range.step + j]) > 220)
+						  range.data[i*range.step + j] = 255;
+					  else range.data[i*range.step + j] = 0;
+				  }
 
-
+				
 		vector<Vec4i> hierarchy;   //每个元素包含4个整数
 		Canny(range, range_canny, 0, 200, 3); //利用canny算法检测边缘  输入必须为灰度图 新的图片存放在range_canny中   
 		vector<vector<Point> > contours;  //定义二维浮点型向量，用来储存边界的坐标，在着边界的时候自动生成，这里给他开辟空间

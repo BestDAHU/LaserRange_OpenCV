@@ -295,7 +295,7 @@ int main()
 					/*这里计算以摄像头为中心的所测量的点的二维坐标，以便得到平面的坐标点云数据*/
 					dis_x = cos(send_num*3.14 / RAD_NUM)*distance;
 					dis_y = sin(send_num*3.14 / RAD_NUM)*distance;
-					dis_z  ;
+					dis_z = tan(PizToCenter_z*pixcel+offset)*distance;
 					outf << dis_x << "  " << dis_y << "  " << 0 << "\r\n";
 					cout << "distance:" << distance << "mm" << "\r\n";
 				}

@@ -284,10 +284,10 @@ int main()
 			{
 				for (int i_raw = 0; i_raw < 480; i_raw++)
 				{
-					sort(dis_arange, dis_arange + 6);     //冒泡排序，将距离值从低到高排序，以便去掉一些误差特别大的点
+					//sort(dis_arange, dis_arange + 6);     //冒泡排序，将距离值从低到高排序，以便去掉一些误差特别大的点
 					dis_av = (dis_arange[i_raw][1] + dis_arange[i_raw][2] + dis_arange[i_raw][3] + dis_arange[i_raw][4]) / 4.0;    //平均亮度中心的像素点坐标
 					PixToCenter = abs(range.cols / 2 - dis_av);    //以摄像头感光元件正中心为坐标原点的绝对坐标
-					PizToCenter_z = range.row / 2 - i_raw;
+					PizToCenter_z = range.rows / 2 - i_raw;
 					distance = w_mm / tan(PixToCenter * pixcel + offset);   //计算实际距离的公式  注意：以mm为单位，计算用的角度以rad为单位，并不是°为单位
 					if (distance < 0)
 						distance = -distance;
@@ -295,7 +295,7 @@ int main()
 					/*这里计算以摄像头为中心的所测量的点的二维坐标，以便得到平面的坐标点云数据*/
 					dis_x = cos(send_num*3.14 / RAD_NUM)*distance;
 					dis_y = sin(send_num*3.14 / RAD_NUM)*distance;
-					dis_z = ;
+					dis_z  ;
 					outf << dis_x << "  " << dis_y << "  " << 0 << "\r\n";
 					cout << "distance:" << distance << "mm" << "\r\n";
 				}

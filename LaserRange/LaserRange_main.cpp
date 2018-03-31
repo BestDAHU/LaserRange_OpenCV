@@ -166,7 +166,7 @@ int main()
 	float av_pixy=0;
 	int av_pixy_num = 0;
 	int av_point_num=0;
-	float av_pixy_last = 0;
+	float av_pixy_last[480];
 	int move_flag = 0;
 	double dis_arange[480][6];
 	double distance = 0;
@@ -182,7 +182,7 @@ int main()
 	string Time;
 	char send[20];
 
-	VideoCapture cap(0);     //1为本电脑摄像头，0为外接摄像头
+	VideoCapture cap(1);     //
 
 	connectstate = serial_connect(hCom, L"\\\\.\\COM13", CBR_115200);   //打开10以上的串口需要加上\\\\.\\
 	 /*打开串口*/
@@ -228,7 +228,7 @@ int main()
 		/*由于图像的上半部分光线常常比较暗，图像的上半部分与下半部分分开处理*/
 		/*按行遍历，行数小于200行与大于200行的单独处理                      */
 		for(int i=0;i<range.rows;i++)
-			if(i<200)
+			if(i<250)
 			for (int j = 0; j < range.cols; j++)
 			{
 				if ((range.data[i*range.step + j]) > 50)
@@ -242,8 +242,6 @@ int main()
 						  range.data[i*range.step + j] = 255;
 					  else range.data[i*range.step + j] = 0;
 				  }
-
-				
 		vector<Vec4i> hierarchy;   //每个元素包含4个整数
 		Canny(range, range_canny, 0, 200, 3); //利用canny算法检测边缘  输入必须为灰度图 新的图片存放在range_canny中   
 		vector<vector<Point> > contours;  //定义二维浮点型向量，用来储存边界的坐标，在着边界的时候自动生成，这里给他开辟空间
@@ -253,12 +251,11 @@ int main()
 		if (begin_flag == 1)
 		{
 			av_point_num++;
-
 			/*按行遍历每张图片，将每行中的最亮点的坐标存在dis_arange[480][6]二维数组里*/
 			for (int i_raw = 0; i_raw < 480; i_raw++)    //按行遍历，查找最亮点
 			{
 				/*直接判断取平均*/
-				for (int i = range_canny.cols / 2; i < range_canny.cols; i++)   //摄像头接收的光只可能在感光元件的右半部分，直接从中点向后寻找即可
+				for (int i = 0; i < range_canny.cols/2; i++)   //摄像头接收的光只可能在感光元件的右半部分，直接从中点向后寻找即可
 				{
 					if (range_canny.data[i_raw * range_canny.step + i] > 220)     //取轮廓图中每行上亮度大于220的点，表示边缘的点的坐标，左边缘或者右边缘，所有表示边缘的点的绝对坐标（从图像边沿算起）相加
 					{
@@ -268,15 +265,14 @@ int main()
 				}
 				/*计算一张图片中，最亮点的平均绝对坐标，用av_pixy表示*/
 				if (av_pixy_num == 0)           //如果某张图片中的某行不存在边缘点，则直接算作上一次的值，以消除噪声干扰和计算错误
-					av_pixy = av_pixy_last;
+					av_pixy = av_pixy_last[i_raw];
 				else
 					av_pixy = av_pixy / av_pixy_num;
 
-				av_pixy_last = av_pixy;
 
+				av_pixy_last[i_raw] = av_pixy;
 				dis_arange[i_raw][av_point_num-1] = av_pixy; //储存6张图片中的平均最亮点绝对坐标
 			}
-
 			/*收集完成6张图片，这时处理dis_arange[][]数组的数据                    */
 			/*先进行冒泡排序，也是按行遍历所有的距离信息，挨个输出每个点的x,y,z坐标，输出到文件LaserRangeData.txt*/
 			/*利用matlab进行进一步的重现 */
@@ -291,19 +287,18 @@ int main()
 					distance = w_mm / tan(PixToCenter * pixcel + offset);   //计算实际距离的公式  注意：以mm为单位，计算用的角度以rad为单位，并不是°为单位
 					if (distance < 0)
 						distance = -distance;
-
 					/*这里计算以摄像头为中心的所测量的点的二维坐标，以便得到平面的坐标点云数据*/
 					dis_x = cos(send_num*3.14 / RAD_NUM)*distance;
 					dis_y = sin(send_num*3.14 / RAD_NUM)*distance;
 					dis_z = tan(PizToCenter_z*pixcel+offset)*distance;
-					outf << dis_x << "  " << dis_y << "  " << 0 << "\r\n";
-					cout << "distance:" << distance << "mm" << "\r\n";
+					outf << dis_x << "  " << dis_y << "  " << dis_z << "\r\n";				
 				}
+				cout << "distance:" << distance << "mm" << "\r\n";
 				send_num++;                         //舵机旋转的次数，用来计算舵机旋转的弧度值，计算坐标时用 
 				av_point_num = 0;                   //计数清零
 				strcpy_s(send, "ABCDEF\r\n");       //使用串口发送字符串，控制舵机旋转一定角度
 				Write(hCom, send, 8);//发送“ABCDE”
-				Sleep(5);//延时0.5s
+				Sleep(0.05);//延时0.5s
 			}
 		}
 

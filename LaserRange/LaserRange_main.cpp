@@ -170,6 +170,7 @@ int main()
 	int move_flag = 0;
 	double dis_arange[480][6];
 	double distance = 0;
+	double distance_last = 0;
 	float PixToCenter = 0;
 	float PizToCenter_z = 0;
 	float dis_av = 0;
@@ -199,7 +200,8 @@ int main()
 	}
 	/*打开坐标输出文件*/
 	ofstream outf;   //文件输入流
-	outf.open("LaserRangeData.txt",ios::app);   //ios::app表示在未见末尾追加而不覆盖
+	//outf.open("LaserRangeData.txt",ios::out|ios::app);   //ios::app表示在未见末尾追加而不覆盖
+    outf.open("LaserRangeData.txt");   //打开文件并重新写入内容，若没有文件，则创建再写入
 	Time = GetTime();
 	if (!outf) 
 	{
@@ -226,22 +228,33 @@ int main()
 
 		/*这里将图像亮度不高的点全部设置为0，软件二值化                     */
 		/*由于图像的上半部分光线常常比较暗，图像的上半部分与下半部分分开处理*/
-		/*按行遍历，行数小于200行与大于200行的单独处理                      */
+		/*按行遍历，分行单独处理                                            */
 		for(int i=0;i<range.rows;i++)
-			if(i<250)
-			for (int j = 0; j < range.cols; j++)
+			if(i<210)
+			for (int j = 0; j < range.cols; j++)            
 			{
-				if ((range.data[i*range.step + j]) > 50)
-					range.data[i*range.step + j] = 255;
+				if (j < (range.cols / 2))            //将图像不会用到的另外一半直接赋值为0，以免造成干扰
+				{
+					if ((range.data[i*range.step + j]) > 100)
+						range.data[i*range.step + j] = 255;
+					else range.data[i*range.step + j] = 0;
+				}
 				else range.data[i*range.step + j] = 0;
 			}
-		    else
-				  for (int j = 0; j < range.cols; j++)
-				  {
-					  if ((range.data[i*range.step + j]) > 220)
-						  range.data[i*range.step + j] = 255;
-					  else range.data[i*range.step + j] = 0;
-				  }
+			else {
+				
+				for (int j = 0; j < range.cols; j++)
+				{
+					if (j < (range.cols / 2))
+					{
+						if ((range.data[i*range.step + j]) > 50)
+							range.data[i*range.step + j] = 255;
+						else range.data[i*range.step + j] = 0;
+					}
+					else range.data[i*range.step + j] = 0;
+				}
+				
+			}
 		vector<Vec4i> hierarchy;   //每个元素包含4个整数
 		Canny(range, range_canny, 0, 200, 3); //利用canny算法检测边缘  输入必须为灰度图 新的图片存放在range_canny中   
 		vector<vector<Point> > contours;  //定义二维浮点型向量，用来储存边界的坐标，在着边界的时候自动生成，这里给他开辟空间
@@ -269,9 +282,10 @@ int main()
 				else
 					av_pixy = av_pixy / av_pixy_num;
 
-
 				av_pixy_last[i_raw] = av_pixy;
 				dis_arange[i_raw][av_point_num-1] = av_pixy; //储存6张图片中的平均最亮点绝对坐标
+				av_pixy_num = 0;                             //亮点计数值清零
+				av_pixy = 0;
 			}
 			/*收集完成6张图片，这时处理dis_arange[][]数组的数据                    */
 			/*先进行冒泡排序，也是按行遍历所有的距离信息，挨个输出每个点的x,y,z坐标，输出到文件LaserRangeData.txt*/
@@ -280,7 +294,7 @@ int main()
 			{
 				for (int i_raw = 0; i_raw < 480; i_raw++)
 				{
-					//sort(dis_arange, dis_arange + 6);     //冒泡排序，将距离值从低到高排序，以便去掉一些误差特别大的点
+					sort(dis_arange[i_raw], dis_arange[i_raw] + 6);     //冒泡排序，将距离值从低到高排序，以便去掉一些误差特别大的点
 					dis_av = (dis_arange[i_raw][1] + dis_arange[i_raw][2] + dis_arange[i_raw][3] + dis_arange[i_raw][4]) / 4.0;    //平均亮度中心的像素点坐标
 					PixToCenter = abs(range.cols / 2 - dis_av);    //以摄像头感光元件正中心为坐标原点的绝对坐标
 					PizToCenter_z = range.rows / 2 - i_raw;
@@ -290,10 +304,11 @@ int main()
 					/*这里计算以摄像头为中心的所测量的点的二维坐标，以便得到平面的坐标点云数据*/
 					dis_x = cos(send_num*3.14 / RAD_NUM)*distance;
 					dis_y = sin(send_num*3.14 / RAD_NUM)*distance;
-					dis_z = tan(PizToCenter_z*pixcel+offset)*distance;
-					outf << dis_x << "  " << dis_y << "  " << dis_z << "\r\n";				
+					dis_z = tan(PizToCenter_z*pixcel+offset)*distance;	
+					outf << dis_x << "  " << dis_y << "  " << dis_z << "\r\n";	  //向指定文件输出x，y，z坐标值
+					if (i_raw==240)                  
+					cout << "distance:" << distance << "mm" << "\r\n";        //输出中心坐标值，测试摄像头矫正参数
 				}
-				cout << "distance:" << distance << "mm" << "\r\n";
 				send_num++;                         //舵机旋转的次数，用来计算舵机旋转的弧度值，计算坐标时用 
 				av_point_num = 0;                   //计数清零
 				strcpy_s(send, "ABCDEF\r\n");       //使用串口发送字符串，控制舵机旋转一定角度
@@ -301,7 +316,6 @@ int main()
 				Sleep(0.05);//延时0.5s
 			}
 		}
-
 		///*计算距离*/
 		//PixToCenter = abs(range.cols / 2 - MaxWidth);
 		//PixToCenter = abs(range.cols / 2 - av_pixy);

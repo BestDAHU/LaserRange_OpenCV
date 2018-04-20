@@ -9,15 +9,15 @@
 #include<string.h>
 #pragma comment(lib,"setupapi.lib")
 
-#define RAD_NUM 190
+#define RAD_NUM 400
 using namespace std;
 using namespace cv;
 
 float w_mm = 100;                     //摄像头中心到激光发射器中心的距离10cm
 float offset = 0.00583948;            //每个像素点对应的弧度值的误差补偿
 float pixcel = 0.001859768;           //像素点对应的弧度制
-float offset_z = 0;                   //误差补偿在z轴上的对应值
-float pixcel_z = 0;                   //像素点在z轴上对应的弧度值
+float offset_z = -0.102031;                   //误差补偿在z轴上的对应值
+float pixcel_z = 0.003523;                   //像素点在z轴上对应的弧度值
 
 wchar_t** GetSerialNumber(int& len) {//通过读取设备管理器，得到可用的串口号
 									 //先通过读取设备管理器，得到类型为“Ports”的设备，并把这些设备的友好类型记录下来
@@ -183,7 +183,7 @@ int main()
 	string Time;
 	char send[20];
 
-	VideoCapture cap(1);     //
+	VideoCapture cap(0);     //
 
 	connectstate = serial_connect(hCom, L"\\\\.\\COM13", CBR_115200);   //打开10以上的串口需要加上\\\\.\\
 	 /*打开串口*/
@@ -208,7 +208,7 @@ int main()
 		cout << "无法打开数据文件...\n";
 		system("pause");
 	}
-	else outf << Time;
+	//else outf << Time;
     
 
 	while (!stop)        //USB摄像头640*480（col*row）
@@ -235,7 +235,7 @@ int main()
 			{
 				if (j < (range.cols / 2))            //将图像不会用到的另外一半直接赋值为0，以免造成干扰
 				{
-					if ((range.data[i*range.step + j]) > 100)
+					if ((range.data[i*range.step + j]) > 20)
 						range.data[i*range.step + j] = 255;
 					else range.data[i*range.step + j] = 0;
 				}
@@ -247,7 +247,7 @@ int main()
 				{
 					if (j < (range.cols / 2))
 					{
-						if ((range.data[i*range.step + j]) > 50)
+						if ((range.data[i*range.step + j]) > 20)
 							range.data[i*range.step + j] = 255;
 						else range.data[i*range.step + j] = 0;
 					}
@@ -268,9 +268,9 @@ int main()
 			for (int i_raw = 0; i_raw < 480; i_raw++)    //按行遍历，查找最亮点
 			{
 				/*直接判断取平均*/
-				for (int i = 0; i < range_canny.cols/2; i++)   //摄像头接收的光只可能在感光元件的右半部分，直接从中点向后寻找即可
+				for (int i = 0; i < range.cols/2; i++)   //摄像头接收的光只可能在感光元件的右半部分，直接从中点向后寻找即可
 				{
-					if (range_canny.data[i_raw * range_canny.step + i] > 220)     //取轮廓图中每行上亮度大于220的点，表示边缘的点的坐标，左边缘或者右边缘，所有表示边缘的点的绝对坐标（从图像边沿算起）相加
+					if (range.data[i_raw * range.step + i] > 220)     //取轮廓图中每行上亮度大于220的点，表示边缘的点的坐标，左边缘或者右边缘，所有表示边缘的点的绝对坐标（从图像边沿算起）相加
 					{
 						av_pixy = av_pixy + i;
 						av_pixy_num++;          //记录边缘点的个数，以求中心点的平均坐标
@@ -299,12 +299,12 @@ int main()
 					PixToCenter = abs(range.cols / 2 - dis_av);    //以摄像头感光元件正中心为坐标原点的绝对坐标
 					PizToCenter_z = range.rows / 2 - i_raw;
 					distance = w_mm / tan(PixToCenter * pixcel + offset);   //计算实际距离的公式  注意：以mm为单位，计算用的角度以rad为单位，并不是°为单位
+					dis_z = tan(PizToCenter_z*pixcel_z + offset_z) / sin(PixToCenter * pixcel + offset) * 100;      //假设z轴坐标与图像纵坐标成一定关系，用线性估计，计算出Z轴坐标
 					if (distance < 0)
 						distance = -distance;
 					/*这里计算以摄像头为中心的所测量的点的二维坐标，以便得到平面的坐标点云数据*/
 					dis_x = cos(send_num*3.14 / RAD_NUM)*distance;
-					dis_y = sin(send_num*3.14 / RAD_NUM)*distance;
-					dis_z = tan(PizToCenter_z*pixcel+offset)*distance;	
+					dis_y = sin(send_num*3.14 / RAD_NUM)*distance;	
 					outf << dis_x << "  " << dis_y << "  " << dis_z << "\r\n";	  //向指定文件输出x，y，z坐标值
 					if (i_raw==240)                  
 					cout << "distance:" << distance << "mm" << "\r\n";        //输出中心坐标值，测试摄像头矫正参数
@@ -355,16 +355,16 @@ int main()
 	   cv::putText(range, DisString, cv::Point(MaxWidth, MaxHeight), cv::FONT_HERSHEY_COMPLEX, 0.5, Scalar(255, 255, 255));
 
 	   /*给每个图像窗命名*/
-	   imshow("灰度图", range);
+	   imshow("软件二值化图", range);
 	   imshow("原图", frame);
-	   imshow("canny", range_canny);
+	  // imshow("canny", range_canny);
 
 	   /*在第一次显示图像时固定图像出现的位置，防止图像出现时窗体在屏幕的外面而无法操作*/
 	   if (move_flag == 0)
 	   {
 		   cvMoveWindow("原图", 10, 10);
-		   cvMoveWindow("灰度图", 200, 10);
-		   cvMoveWindow("canny", 10, 50);
+		   cvMoveWindow("软件二值化图", 200, 10);
+		   //cvMoveWindow("canny", 10, 50);
 		   move_flag = 1;
 	   }
 
